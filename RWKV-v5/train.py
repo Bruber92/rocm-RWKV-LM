@@ -245,7 +245,19 @@ if __name__ == "__main__":
     train_data = MyDataset(args)
     args.vocab_size = train_data.vocab_size
 
+
+    if pl.__version__[0]=='2':
+        trainer = Trainer(accelerator=args.accelerator,strategy=args.strategy,devices=args.devices,num_nodes=args.num_nodes,precision=args.precision,
+        logger=args.logger,callbacks=[train_callback(args)],max_epochs=args.max_epochs,check_val_every_n_epoch=args.check_val_every_n_epoch,num_sanity_val_steps=args.num_sanity_val_steps,
+        log_every_n_steps=args.log_every_n_steps,enable_checkpointing=args.enable_checkpointing,accumulate_grad_batches=args.accumulate_grad_batches,gradient_clip_val=args.gradient_clip_val)
+    else:
+        trainer = Trainer.from_argparse_args(
+            args,
+            callbacks=[train_callback(args)],
+        )
+
     from src.model import RWKV
+    args.deepspeed_engine = trainer.strategy.model
     model = RWKV(args)
 
     if len(args.load_model) == 0 or args.my_pile_stage == 1:  # shall we build the initial weights?
@@ -279,16 +291,6 @@ if __name__ == "__main__":
             if k not in load_keys:
                 load_dict[k] = model.state_dict()[k]
     model.load_state_dict(load_dict)
-
-    if pl.__version__[0]=='2':
-        trainer = Trainer(accelerator=args.accelerator,strategy=args.strategy,devices=args.devices,num_nodes=args.num_nodes,precision=args.precision,
-        logger=args.logger,callbacks=[train_callback(args)],max_epochs=args.max_epochs,check_val_every_n_epoch=args.check_val_every_n_epoch,num_sanity_val_steps=args.num_sanity_val_steps,
-        log_every_n_steps=args.log_every_n_steps,enable_checkpointing=args.enable_checkpointing,accumulate_grad_batches=args.accumulate_grad_batches,gradient_clip_val=args.gradient_clip_val)
-    else:
-        trainer = Trainer.from_argparse_args(
-            args,
-            callbacks=[train_callback(args)],
-        )
 
     if trainer.global_rank == 0:
         for n in model.state_dict():
